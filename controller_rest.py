@@ -121,15 +121,16 @@ def bms_create(req, ImageName):
     body = {
 	  "cpu": 32,
 	  "hostId": hostId,
-	  "disks": [
-	     "size": 480
+	  "disks": [{
+	     "capacity": 480,
 	     "type": "SATA"
-	  ],
+	  }],
 	  "image": {
 	    "imageName": ImageName,
 	    "password": password,
 	    "username": username
 	  },
+	  "monitorIp": "10.240.90.16",
 	  "nics": [
 	    {
 	      "bandwidth": 10,
@@ -184,15 +185,14 @@ if __name__ == "__main__":
     rest = RestRequest()
     hostIds = ("3")
     #imageNames = get_images()
-    ImageName = "centos7.5_64"
+    imageName = "rhel7.6_64"
     username, password = ("root", "bms@@@001")
     #username, password = ("administrator", "bms@@@001")
     #loops = 1
     for hostId in hostIds:	
     	bms_power(rest, hostId, "stop")
-        task_id = bms_del(rest, hostId)
-	#task_id = bms_create(rest, imageName)
-        logger.info("bms delete task starting")
+        #task_id = bms_del(rest, hostId)
+	task_id = bms_create(rest, imageName)
         if task_id != "error":
             bms_task(rest, task_id)
             logger.info("task successful")

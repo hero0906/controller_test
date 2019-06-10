@@ -122,13 +122,17 @@ def bms_create(req, ImageName):
 	"cpu": 32,
 	"hostId": hostId,
 	"disks": [
-	    480,480
+            {
+                "capacity": 480,
+                "type": "SATA"
+            }
 	],
 	"image": {
 	    "imageName": ImageName,
 	    "password": password,
 	    "username": username
 	},
+	"monitorIp": "10.240.90.16",
         "nics": [
             {
                 "bandwidth": 1000,
@@ -161,7 +165,7 @@ def bms_create(req, ImageName):
 
 def get_images():
     images = [] 
-    lines = os.popen('ls /tftpboot/user_images/|grep qcow2').read()
+    lines = os.popen('ls /tftpboot/user_images/|grep 64').read()
     for line in lines.split("\n"):
 	images.append(line)
     return images
@@ -184,7 +188,7 @@ if __name__ == "__main__":
     hostIds = ("3")
     #imageNames = get_images()
     loops = 1
-"""
+    """
     for hostId in hostIds:	
     	bms_power(rest, hostId, "stop")
 	#bms_del(rest, hostId)
@@ -195,12 +199,13 @@ if __name__ == "__main__":
             logger.info("bms delete task successful")
         else:
             logger.error("Image:, del task fail!!!")
-"""
-
-    imageName = "rhel7.6_64"
-    username, password = ("root", "bms@@@001")
-    task_id = bms_create(rest, imageName)
-    bms_task(rest, task_id)
+    """
+    for hostId in hostIds:
+        imageName = "rhel7.6_64"
+        username, password = ("root", "bms@@@001")
+	bms_power(rest, hostId, "stop")
+        task_id = bms_create(rest, imageName)
+        bms_task(rest, task_id)
 
 
 
