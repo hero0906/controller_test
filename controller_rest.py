@@ -5,8 +5,7 @@ import json
 import uuid
 import random
 import socket
-import struct
-#import ast
+import threading
 import os
 from time import sleep
 import paramiko
@@ -83,27 +82,31 @@ def bms_task(req, task_id):
     	status, result = req.get(path, None)
 	results = simplejson.loads(result)
     	task_state = results[u'data'][u'state']
-#	logger.debug("image : %s taskid:%s state : %s" %(imageName, task_id, task_state))
 	logger.debug(results)
 	if str(task_state) == "Completed":
 		logger.info(results)
 		break
+	elif str(task_state) == "Failed":
+		logger.error(results)
+		break
 	sleep(5)
 
-def bms_del(req, hostId):
+def bms_del(hostId):
     path = '/bms/v1/delete'
     body = {
     "hostId": hostId,
 	}
     data = simplejson.dumps(body)
+    req = RestRequest()
+    bms_power(req, hostId, "stop")
     try:
-    	status, result = req.post(path, data, None)
-	results = simplejson.loads(result)
-	logger.debug(results)
-	return results[u'data'][u'id']
+        status, result = req.post(path, data, None)
+        results = simplejson.loads(result)
+        logger.debug(results)
+        task_id = results[u'data'][u'id']
+        bms_task(req, task_id)
     except Exception,e:
-	logger.error(e)
-    	return "error"
+        logger.error(e)
 
 def bms_power(req, hostId, power):
     path = '/bms/v1/power/%s' %(power)
@@ -116,7 +119,13 @@ def bms_power(req, hostId, power):
     logger.info("power %s" %power)
     sleep(2)
 
-def bms_create(req, ImageName):
+def bms_create(hostId):
+    imageNames = get_images()
+    imageName = random.choice(imageNames)
+    if imageName[:3] == "win":
+        username, password = ("administrator", "bms@@@001")
+    else:
+        username, password = ("root", "bms@@@001")
     path = '/bms/v1/create'
     body = {
 	  "cpu": 32,
@@ -126,87 +135,102 @@ def bms_create(req, ImageName):
 	     "type": "SATA"
 	  }],
 	  "image": {
-	    "imageName": ImageName,
+	    "imageName": imageName,
 	    "password": password,
 	    "username": username
 	  },
-	  "monitorIp": "10.240.90.16",
+	  "monitorIp": "10.240.90.36",
 	  "nics": [
 	    {
-	      "bandwidth": 10,
-	      "dns": [
-	        "8.8.8.8"
-	      ],
-	      "gateway": "114.112.35.25",
-	      "ipAddress": "114.112.35.26",
+	      "bandwidth": 1000,
+	      "dns": ["8.8.8.8",
+                  "114.114.114.114"],
+#	      "gateway": "114.112.35.25",
+#	      "ipAddress": "114.112.35.26",
+#	      "netmask": "255.255.255.252",
+#	      "vlanId": "1975"
+	      "gateway": "114.112.35.17",
+	      "ipAddress": "114.112.35.18",
 	      "netmask": "255.255.255.252",
-	      "vlanId": "1975"
+	      "vlanId": "1973"
 	    },
 	{
 	      "bandwidth": 1000,
-	      "dns": ["114.114.114.114"],
-	      "ipAddress": "10.240.90.6",
+	      "ipAddress": "10.240.90.16",
+          "netmask": "255.255.255.0",
 	      "vlanId": "1018"
 	    }
 	  ],
-	  "ram": 64
+	  "ram": 64,
+	  "siteId": "2bbacc90-5e8f-4394-92e1-3f237de1ae8d"
 	}
     data = simplejson.dumps(body)
+    req = RestRequest()
+    bms_power(req, hostId, "stop")
     try:
-    	status, result = req.post(path, data, None)
-	results = simplejson.loads(result)
-	logger.debug(results)
-	return results[u'data'][u'id']
+        status, result = req.post(path, data, None)
+        results = simplejson.loads(result)
+        logger.debug(results)
+        task_id = results[u'data'][u'id']
+        bms_task(req, task_id)
     except Exception,e:
-	logger.error(e)
-    	return "error"
+        logger.error(e)
 
 def get_images():
     images = [] 
-    lines = os.popen('ls /tftpboot/user_images/|grep qcow2').read()
-    for line in lines.split("\n"):
-	images.append(line)
-    return images
+    try:
+        lines = os.popen('ls /tftpboot/user_images/|grep 64').read()
+        for line in lines.split("\n"):
+            images.append(line)
+        return images
+    except Exception,e:
+        logger.error("get image fail %s" %str(e))
 
 def ssh2(ip, password):
     try:
-	ssh = paramiko.SSHClient()
-	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-	ssh.connect(ip, 22, "root", password, timeout=5)
-	stdin, stdout, stderr = ssh.exec_command("ip addr")
-	out = stdout.readlines()
-	logger.info(out)
-	ssh.close()
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(ip, 22, "root", password, timeout=5)
+        stdin, stdout, stderr = ssh.exec_command("ip addr")
+        out = stdout.readlines()
+        logger.info(out)
     except Exception,e:
-	logger.error(e)
+        logger.error(e)
+    finally:
+        ssh.close()
+
+def connect_db(hostId):
+    host = "10.128.121.11"
+    username = "root"
+    password = "cds-china"
+    dbname = "cds_bmscontrol"
+    db = pymysql.connect(host, username, password, dbname)
+    cursor = db.cursor()
+    sql = 'UPDATE host SET state="assignable" WHERE id=%s' %hostId
+    try:
+    	sta = cursor.execute(sql)
+    	logger.info("%s status: %s" %(sql, sta))
+    	db.commit()
+    except Exception,e:
+        logger.error(e)
+       	db.rollback()
+    finally:
+        cursor.close()
+        db.close()
+
+def multi_threads(func):
+    threads = []
+    for hostId in hosts:
+        tid = threading.Thread(name='func', target=func, args=(hostId,))
+        tid.start()
+        threads.append(tid)
+    for tid in threads:
+        tid.join()
 
 
 if __name__ == "__main__":
-    rest = RestRequest()
-    hostIds = ("3")
-    #imageNames = get_images()
-    imageName = "rhel7.6_64"
-    username, password = ("root", "bms@@@001")
-    #username, password = ("administrator", "bms@@@001")
-    #loops = 1
-    for hostId in hostIds:	
-    	bms_power(rest, hostId, "stop")
-        #task_id = bms_del(rest, hostId)
-	task_id = bms_create(rest, imageName)
-        if task_id != "error":
-            bms_task(rest, task_id)
-            logger.info("task successful")
-        else:
-            logger.error("task fail!!!")
-
-"""
-    imageName = "centos6.9-uefi-image.qcow2"
-    username, password = ("root", "bms@@@001")
-    task_id = bms_create(rest, imageName)
-    bms_task(rest, task_id)
-"""
-
-
+    hosts = ("1", "2", "3", "4", "5")
+    multi_threads(bms_create)
 
 """
     while True:

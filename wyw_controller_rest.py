@@ -137,20 +137,22 @@ def bms_create(req, ImageName):
             {
                 "bandwidth": 1000,
                 "dns": [
-                    "114.114.114.114"
+                    "114.114.114.114",
+                    "114.114.115.115"
                 ],
                 "gateway": "114.112.35.25",
                 "ipAddress": "114.112.35.26",
                 "netmask": "255.255.255.252",
-                "vlanId": "1975"
+                "vlanId": 1975
             },
             {
                 "bandwidth": 1000,
-                "dns": ["114.114.114.114"],
                 "ipAddress": "10.240.90.6",
-                "vlanId": "1018"
+                "netmask": "255.255.255.0",
+                "vlanId": 1018
             }
         ],
+	"siteId": "2bbacc90-5e8f-4394-92e1-3f237de1ae8d",
         "ram": 64
     }
     data = simplejson.dumps(body)
@@ -201,6 +203,8 @@ if __name__ == "__main__":
             logger.error("Image:, del task fail!!!")
     """
     for hostId in hostIds:
+        #imageName = "windows2016_64"
+        #imageName = "windows2012r2-uefi-image.qcow2"
         imageName = "rhel7.6_64"
         username, password = ("root", "bms@@@001")
 	bms_power(rest, hostId, "stop")

@@ -181,7 +181,7 @@ def ssh2(ip, password):
 
 if __name__ == "__main__":
     rest = RestRequest()
-    hostIds = ("3")
+    hostIds = ("1","2","4","5")
     imageNames = get_images()
     loops = 1
     for hostId in hostIds:	
